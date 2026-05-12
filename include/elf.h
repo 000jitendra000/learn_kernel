@@ -3,14 +3,12 @@
 
 #include "types.h"
 
-/* ── ELF32 types ─────────────────────────────────────────────────────────── */
 typedef uint32_t Elf32_Addr;
 typedef uint32_t Elf32_Off;
 typedef uint16_t Elf32_Half;
 typedef uint32_t Elf32_Word;
 typedef int32_t  Elf32_Sword;
 
-/* ── ELF identification ──────────────────────────────────────────────────── */
 #define EI_NIDENT   16
 #define ELFMAG0     0x7F
 #define ELFMAG1     'E'
@@ -21,7 +19,6 @@ typedef int32_t  Elf32_Sword;
 #define EM_386      3
 #define PT_LOAD     1
 
-/* ── ELF32 header ────────────────────────────────────────────────────────── */
 typedef struct {
     uint8_t    e_ident[EI_NIDENT];
     Elf32_Half e_type;
@@ -39,7 +36,6 @@ typedef struct {
     Elf32_Half e_shstrndx;
 } __attribute__((packed)) Elf32_Ehdr;
 
-/* ── ELF32 program header ────────────────────────────────────────────────── */
 typedef struct {
     Elf32_Word p_type;
     Elf32_Off  p_offset;
@@ -52,28 +48,16 @@ typedef struct {
 } __attribute__((packed)) Elf32_Phdr;
 
 /*
- * elf_load(image)
+ * exec_elf(image, ppid)
  *
- * Parse an ELF32 executable from a byte array.
- * For each PT_LOAD segment:
- *   - allocates memory via kmalloc(p_memsz)
- *   - copies p_filesz bytes from the image
- *   - zeroes the BSS region (p_memsz - p_filesz)
+ * Full user-mode ELF loader:
+ *   - creates per-process page directory
+ *   - maps PT_LOAD segments at p_vaddr with PAGE_USER
+ *   - maps user stack at 0x00C00000
+ *   - creates user process via proc_create_user
  *
- * Entry point is relocated to account for kmalloc placement:
- *   relocated_entry = alloc_base + (e_entry - p_vaddr)
- *
- * Returns relocated entry point, or 0 on error.
- * Only valid for single-PT_LOAD PIC executables.
+ * Returns proc_t * or NULL on failure.
  */
-uint32_t elf_load(const uint8_t *image);
-
-/*
- * exec_process(entry, ppid)
- *
- * Wrap a relocated entry point into a new process.
- * Returns proc_t *, or NULL on failure.
- */
-struct proc *exec_process(void (*entry)(void), uint32_t ppid);
+struct proc *exec_elf(const uint8_t *image, uint32_t ppid);
 
 #endif

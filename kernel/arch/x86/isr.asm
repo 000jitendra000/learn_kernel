@@ -52,22 +52,12 @@ ISR_NOERRCODE 31
 ISR_NOERRCODE 128    ; int 0x80 syscall gate
 
 isr_common:
+
+    cli
+
     pusha
 
-    xor eax, eax
     mov ax, ds
-    push eax
-
-    xor eax, eax
-    mov ax, es
-    push eax
-
-    xor eax, eax
-    mov ax, fs
-    push eax
-
-    xor eax, eax
-    mov ax, gs
     push eax
 
     mov ax, 0x10
@@ -81,17 +71,14 @@ isr_common:
     add esp, 4
 
     pop eax
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
     mov gs, ax
 
-    pop eax
-    mov fs, ax
-
-    pop eax
-    mov es, ax
-
-    pop eax
-    mov ds, ax
-
     popa
+
     add esp, 8
+
+    sti
     iret

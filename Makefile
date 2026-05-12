@@ -1,6 +1,10 @@
 ASM := nasm
 CC  := gcc
 LD  := ld
+USER_DIR := users
+
+SHELL_ELF := build/shell.elf
+HELLO_ELF := build/hello.elf
 
 CFLAGS  := -m32 -ffreestanding -fno-stack-protector -fno-pie -fno-pic \
            -nostdlib -nostdinc -Wall -Wextra -O2 \
@@ -29,9 +33,17 @@ KERNEL_OBJS := \
     build/task.o \
     build/scheduler.o \
     build/switch.o \
+    build/gdt.o \
+    build/gdt_asm.o \
+    build/ring3.o \
     build/syscall.o \
     build/process.o \
-    build/elf.o
+    build/elf.o \
+    build/fs.o \
+    build/kbd_buf.o \
+	build/shell_bin.o \
+	build/hello_bin.o \
+    build/pipe.o
 
 .PHONY: all clean run debug
 
@@ -56,6 +68,15 @@ build/irq.o: kernel/arch/x86/irq.asm
 
 build/switch.o: kernel/arch/x86/switch.asm
 	$(ASM) -f elf32 -o $@ $<
+
+build/gdt_asm.o: kernel/arch/x86/gdt.asm
+	$(ASM) -f elf32 -o $@ $<
+
+build/ring3.o: kernel/arch/x86/ring3.asm
+	$(ASM) -f elf32 -o $@ $<
+
+build/gdt.o: kernel/arch/x86/gdt.c
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 build/kernel.o: kernel/kernel.c
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -99,13 +120,36 @@ build/process.o: kernel/proc/process.c
 build/elf.o: kernel/exec/elf.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+build/fs.o: kernel/fs/fs.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+build/kbd_buf.o: kernel/drivers/kbd_buf.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+build/pipe.o: kernel/ipc/pipe.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+build/shell_bin.o: $(SHELL_ELF)
+	$(LD) -m elf_i386 -r -b binary -o $@ $<
+
+build/hello_bin.o: $(HELLO_ELF)
+	$(LD) -m elf_i386 -r -b binary -o $@ $<
+
 $(KERNEL_ELF): $(KERNEL_OBJS)
 	$(LD) $(LDFLAGS) -o $@ $^
+
+$(SHELL_ELF): $(USER_DIR)/shell.asm
+	$(ASM) -f elf32 -o build/shell.o $<
+	$(LD) -m elf_i386 -N -e _start -Ttext 0x00400000 -o $@ build/shell.o
+
+$(HELLO_ELF): $(USER_DIR)/hello.asm
+	$(ASM) -f elf32 -o build/hello.o $<
+	$(LD) -m elf_i386 -N -e _start -Ttext 0x00400000 -o $@ build/hello.o
 
 $(KERNEL_BIN): $(KERNEL_ELF)
 	objcopy -O binary $< $@
 
-$(DISK_IMG): $(BOOT_BIN) $(KERNEL_BIN)
+$(DISK_IMG): $(BOOT_BIN) $(KERNEL_BIN) $(SHELL_ELF) $(HELLO_ELF)
 	@mkdir -p disk
 	dd if=/dev/zero     of=$@ bs=512 count=2880 2>/dev/null
 	dd if=$(BOOT_BIN)   of=$@ bs=512 seek=0 conv=notrunc 2>/dev/null

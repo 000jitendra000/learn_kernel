@@ -31,11 +31,7 @@ irq_common:
     pusha
 
     xor eax, eax
-    mov ax, ds
-    push eax
-
-    xor eax, eax
-    mov ax, es
+    mov ax, gs
     push eax
 
     xor eax, eax
@@ -43,7 +39,11 @@ irq_common:
     push eax
 
     xor eax, eax
-    mov ax, gs
+    mov ax, es
+    push eax
+
+    xor eax, eax
+    mov ax, ds
     push eax
 
     mov ax, 0x10
@@ -57,16 +57,16 @@ irq_common:
     add esp, 4
 
     pop eax
-    mov gs, ax
-
-    pop eax
-    mov fs, ax
+    mov ds, ax
 
     pop eax
     mov es, ax
 
     pop eax
-    mov ds, ax
+    mov fs, ax
+
+    pop eax
+    mov gs, ax
 
     popa
     add esp, 8
