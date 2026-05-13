@@ -291,22 +291,33 @@ static uint32_t sys_sleep(uint32_t arg1, uint32_t arg2, uint32_t arg3) {
 
 /* ── dispatcher ──────────────────────────────────────────────────────────── */
 void syscall_dispatch(regs_t *r) {
-    vga_putchar('S');
+
     uint32_t num = r->eax;
+
+    switch (num) {
+
+        case 1:
+            vga_putchar((char)r->ebx);
+            r->eax = 0;
+            return;
+
+        case 2:
+            r->eax = kbd_buf_get();
+            return;
+    }
+
     if (num >= SYSCALL_MAX || !syscall_table[num]) {
         r->eax = (uint32_t)-1;
         return;
     }
 
-    /* Phase 26: for fork, zero eax in the frame BEFORE cloning so
-       the child's copied frame already carries the child return value. */
-    if (num == SYS_FORK) r->eax = 0;
+    if (num == SYS_FORK)
+        r->eax = 0;
 
     r->eax = syscall_table[num](r->ebx, r->ecx, r->edx);
 
     proc_check_signals();
 }
-
 
 static uint32_t sys_fork(uint32_t arg1, uint32_t arg2, uint32_t arg3) {
     (void)arg1; (void)arg2; (void)arg3;

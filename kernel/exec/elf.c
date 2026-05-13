@@ -3,7 +3,7 @@
 #include "process.h"
 #include "paging.h"
 #include "pmm.h"
-#define TEMP_MAP_BASE 0x00C00000
+#define TEMP_MAP_ADDR 0x00300000
 
 extern uint32_t *kernel_dir;
 extern void vga_puts(const char *s);
@@ -71,54 +71,78 @@ uint32_t elf_load_into(const uint8_t *image, uint32_t *dir) {
 
         uint32_t p;
 
-            for (p = 0; p < num_pages; p++) {
+        for (p = 0; p < num_pages; p++) {
 
-                uint32_t frame = pmm_alloc_frame();
-                if (!frame) {
-                    vga_puts("elf: PMM OOM\n");
-                    return 0;
-                }
-
-                uint32_t vpage = vaddr_aligned + p * PAGE_SIZE;
-
-                /*
-                * Map user page into child address space
-                */
-                paging_map_page(dir,
-                                vpage,
-                                frame,
-                                PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
+            uint32_t frame = pmm_alloc_frame();
+            if (!frame) {
+                vga_puts("elf: PMM OOM\n");
+                return 0;
             }
 
-            /*
-            * Now temporarily switch into child CR3
-            * and write directly into mapped userspace.
-            */
-
-            uint32_t *old_dir = paging_get_kernel_dir();
-
-            paging_switch(dir);
-            __asm__ volatile("mov %%cr3, %%eax\nmov %%eax, %%cr3" ::: "eax");
+            uint32_t vpage = vaddr_aligned + p * PAGE_SIZE;
 
             /*
-            * Zero full segment memory
+            * 1. map into USER address space
             */
-            el_memzero((uint8_t *)ph->p_vaddr,
-                    ph->p_memsz);
+            paging_map_page(dir,
+                            vpage,
+                            frame,
+                            PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
 
             /*
-            * Copy ELF bytes
+            * 2. temporary kernel mapping
             */
-            el_memcpy((uint8_t *)ph->p_vaddr,
-                    image + ph->p_offset,
-                    ph->p_filesz);
+            paging_map_page(kernel_dir,
+                            TEMP_MAP_ADDR,
+                            frame,
+                            PAGE_PRESENT | PAGE_WRITE);
+    __asm__ volatile("invlpg (%0)" :: "r"(TEMP_MAP_ADDR) : "memory");
 
             /*
-            * Restore kernel CR3
+            * zero temporary mapped page
             */
-            paging_switch(old_dir);
-        }
-    
+            el_memzero((uint8_t *)TEMP_MAP_ADDR,
+                    PAGE_SIZE);
+
+    /*
+     * determine overlap between ELF segment
+     * and this page
+     */
+    uint32_t frame_start  = vpage;
+    uint32_t frame_end    = vpage + PAGE_SIZE;
+
+    uint32_t seg_start    = ph->p_vaddr;
+    uint32_t seg_file_end = ph->p_vaddr + ph->p_filesz;
+
+    if (frame_end > seg_start &&
+        frame_start < seg_file_end) {
+
+        uint32_t copy_start =
+            (frame_start > seg_start)
+            ? frame_start
+            : seg_start;
+
+        uint32_t copy_end =
+            (frame_end < seg_file_end)
+            ? frame_end
+            : seg_file_end;
+
+        uint32_t len = copy_end - copy_start;
+
+        uint32_t dst_off =
+            copy_start - frame_start;
+
+        uint32_t src_off =
+            (copy_start - seg_start) + ph->p_offset;
+
+        el_memcpy((uint8_t *)TEMP_MAP_ADDR + dst_off,
+                  image + src_off,
+                  len);
+        vga_puts("CODE=");
+        vga_puthex(*(uint32_t *)TEMP_MAP_ADDR);
+        vga_puts("\n");
+    }
+}}
 
     return hdr->e_entry;   /* exact virtual entry — no relocation */
 }
@@ -158,10 +182,31 @@ struct proc *exec_elf(const uint8_t *image, uint32_t ppid) {
 
     /* 3. map user stack (one page, user-accessible) */
     uint32_t stack_frame = pmm_alloc_frame();
-    if (!stack_frame) { vga_puts("exec: no stack frame\n"); return (struct proc *)0; }
-    el_memzero((uint8_t *)stack_frame, PAGE_SIZE);
-    paging_map_page(dir, USER_STACK_PAGE, stack_frame,
+    if (!stack_frame) {
+        vga_puts("exec: no stack frame\n");
+        return (struct proc *)0;
+    }
+
+    /*
+    * map stack into user address space
+    */
+    paging_map_page(dir,
+                    USER_STACK_PAGE,
+                    stack_frame,
                     PAGE_PRESENT | PAGE_WRITE | PAGE_USER);
+
+
+    /*
+    * temporary kernel mapping for zeroing
+    */
+    paging_map_page(kernel_dir,
+                    TEMP_MAP_ADDR,
+                    stack_frame,
+                    PAGE_PRESENT | PAGE_WRITE);
+    __asm__ volatile("invlpg (%0)" :: "r"(TEMP_MAP_ADDR) : "memory");
+
+    el_memzero((uint8_t *)TEMP_MAP_ADDR,
+            PAGE_SIZE);
 
     vga_puts("exec: stack page="); vga_puthex(USER_STACK_PAGE);
     vga_puts(" top=");             vga_puthex(USER_STACK_TOP);

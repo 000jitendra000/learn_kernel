@@ -27,7 +27,6 @@ static void kb_handler(regs_t *r) {
     if (sc & 0x80) return;   /* key release — ignore */
 
     if (sc < SC_MAX && sc_ascii[sc]){
-        vga_putchar(sc_ascii[sc]);
         kbd_buf_push(sc_ascii[sc]);
     }
 }

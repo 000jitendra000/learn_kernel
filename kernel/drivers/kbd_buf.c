@@ -15,8 +15,12 @@ static int      line_ready = 0;
 static task_t *kbd_waiter = (task_t *)0;   /* Phase 25 */
 
 void kbd_buf_init(void) {
-    raw_head  = 0;
-    raw_tail  = 0;
+    uint32_t i;
+
+    for (i = 0; i < KBD_BUF_SIZE; i++)
+        raw_buf[i] = 0;
+    raw_head = 0;
+    raw_tail = 0;
     line_len  = 0;
     line_ready = 0;
     kbd_waiter = (task_t *)0;
@@ -34,6 +38,8 @@ void kbd_set_waiter(task_t *t) {
  */
 void kbd_buf_push(char c) {
     /* echo to VGA omitted here — handled in IRQ layer if desired */
+    raw_buf[raw_head] = c;
+    raw_head = (raw_head + 1) % KBD_BUF_SIZE;
 
     if (c == '\b') {
         if (line_len > 0) line_len--;
@@ -81,4 +87,16 @@ int kbd_line_read(char *buf, uint32_t len) {
     line_ready = 0;
 
     return (int)copy;
+}
+
+int kbd_buf_get(void) {
+
+    if (raw_head == raw_tail)
+        return 0;
+
+    char c = raw_buf[raw_tail];
+
+    raw_tail = (raw_tail + 1) % KBD_BUF_SIZE;
+
+    return (int)c;
 }

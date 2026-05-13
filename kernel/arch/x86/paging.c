@@ -15,7 +15,7 @@ static void memzero(uint8_t *p, uint32_t n);
 #define PTE_IDX(v)  (((v) >> 12) & 0x3FF)
 
 /* First user PDE index — everything at 0x01000000+ lives here */
-#define USER_PDE_START 4
+#define USER_PDE_START 1
 
 
 /* ── internal helpers ────────────────────────────────────────────────────── */
@@ -74,6 +74,8 @@ uint32_t *paging_create_user_dir(void) {
 
     uint32_t i;
 
+
+
     /*
      * clear directory
      */
@@ -96,6 +98,7 @@ uint32_t *paging_create_user_dir(void) {
         if (kernel_dir[i] & PAGE_PRESENT)
             dir[i] = kernel_dir[i];
     }
+    dir[1] = 0;
 
     return dir;
 }
@@ -121,6 +124,7 @@ void paging_init(void) {
                         addr,
                         addr,
                         PAGE_PRESENT | PAGE_WRITE);
+        
 
     /*
      * Explicit task stack arena mapping

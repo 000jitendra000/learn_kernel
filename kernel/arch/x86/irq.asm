@@ -5,6 +5,7 @@ extern irq_handler
 %macro IRQ 2
 global irq%1
 irq%1:
+    cli
     push dword 0
     push dword %2
     jmp irq_common
@@ -28,21 +29,9 @@ IRQ 14, 46
 IRQ 15, 47
 
 irq_common:
+
     pusha
 
-    xor eax, eax
-    mov ax, gs
-    push eax
-
-    xor eax, eax
-    mov ax, fs
-    push eax
-
-    xor eax, eax
-    mov ax, es
-    push eax
-
-    xor eax, eax
     mov ax, ds
     push eax
 
@@ -58,16 +47,13 @@ irq_common:
 
     pop eax
     mov ds, ax
-
-    pop eax
     mov es, ax
-
-    pop eax
     mov fs, ax
-
-    pop eax
     mov gs, ax
 
     popa
+
     add esp, 8
+
+    sti
     iret

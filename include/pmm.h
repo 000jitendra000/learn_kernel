@@ -4,7 +4,6 @@
 #include "types.h"
 
 #define PAGE_SIZE        4096
-#define PMM_BITMAP_ADDR  0x00400000
 #define PMM_RAM_MB       32
 #define PMM_RAM_BYTES    (PMM_RAM_MB * 1024 * 1024)
 #define PMM_TOTAL_FRAMES (PMM_RAM_BYTES / PAGE_SIZE)       /* 8192 */
